@@ -112,5 +112,10 @@ Many thanks to all these libraries' authors and contributors. A detailed list wi
 
 The source code is licensed under GPL v3. License is available [here](/LICENSE).
 
+### Docker
+ Run the following command to build and pudh the docker file.
+
+`docker build -t webogram .`
+`docker tag  webogram docker.aban.io/webogram .`
 
 ### [Contribute](CONTRIBUTING.md)
