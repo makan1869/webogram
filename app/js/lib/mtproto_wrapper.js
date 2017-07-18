@@ -147,6 +147,7 @@ angular.module('izhukov.mtproto.wrapper', ['izhukov.utils', 'izhukov.mtproto'])
     }
 
     function mtpInvokeApi (method, params, options) {
+      console.log("[mtproto_wrapper.js].mtpInvokeApi", method, params, options);
       options = options || {}
 
       var deferred = $q.defer()

@@ -848,6 +848,7 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
 
   .service('AppPeersManager', function ($q, qSync, AppUsersManager, AppChatsManager, MtpApiManager) {
     function getInputPeer (peerString) {
+      console.log("[services.js].getInputPeer", peerString);
       var firstChar = peerString.charAt(0)
       var peerParams = peerString.substr(1).split('_')
 
@@ -878,6 +879,7 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
     }
 
     function getInputPeerByID (peerID) {
+      console.log("[services.js].getInputPeerByID", peerID);
       if (!peerID) {
         return {_: 'inputPeerEmpty'}
       }
@@ -904,6 +906,7 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
     }
 
     function getPeerSearchText (peerID) {
+      console.log("[services.js].getPeerSearchText", peerID);
       var text
       if (peerID > 0) {
         text = '%pu ' + AppUsersManager.getUserSearchText(peerID)
@@ -915,6 +918,7 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
     }
 
     function getPeerString (peerID) {
+      console.log("[services.js].getPeerString", peerID);
       if (peerID > 0) {
         return AppUsersManager.getUserString(peerID)
       }
@@ -922,6 +926,7 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
     }
 
     function getOutputPeer (peerID) {
+      console.log("[services.js].getOutputPeer", peerID);
       if (peerID > 0) {
         return {_: 'peerUser', user_id: peerID}
       }
@@ -933,6 +938,7 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
     }
 
     function resolveUsername (username) {
+      console.log("[services.js].resolveUsername", username);
       var searchUserName = SearchIndexManager.cleanUsername(username)
       if (searchUserName.match(/^\d+$/)) {
         return qSync.when(false)
@@ -961,6 +967,7 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
     }
 
     function getPeerID (peerString) {
+      console.log("[services.js].getPeerID", peerString);
       if (angular.isObject(peerString)) {
         return peerString.user_id
           ? peerString.user_id
@@ -973,34 +980,41 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
     }
 
     function getPeer (peerID) {
+      console.log("[services.js].getPeer", peerID);
       return peerID > 0
         ? AppUsersManager.getUser(peerID)
         : AppChatsManager.getChat(-peerID)
     }
 
     function getPeerPhoto (peerID) {
+      console.log("[services.js].getPeerPhoto", peerID);
       return peerID > 0
         ? AppUsersManager.getUserPhoto(peerID)
         : AppChatsManager.getChatPhoto(-peerID)
     }
 
     function isChannel (peerID) {
+      console.log("[services.js].isChannel", peerID);
       return (peerID < 0) && AppChatsManager.isChannel(-peerID)
     }
 
     function isMegagroup (peerID) {
+      console.log("[services.js].isMegagroup", peerID);
       return (peerID < 0) && AppChatsManager.isMegagroup(-peerID)
     }
 
     function isAnyGroup (peerID) {
+      console.log("[services.js].isAnyGroup", peerID);
       return (peerID < 0) && !AppChatsManager.isBroadcast(-peerID)
     }
 
     function isBroadcast (id) {
+      console.log("[services.js].isBroadcast", id);
       return isChannel(id) && !isMegagroup(id)
     }
 
     function isBot (peerID) {
+      console.log("[services.js].isBot", peerID);
       return (peerID > 0) && AppUsersManager.isBot(peerID)
     }
 
@@ -2589,7 +2603,145 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
       return acc
     }
   })
+  .service("SerenadeManager" , function (ngstomp, AppMessagesIDsManager, MtpApiManager) {
 
+    ngstomp
+        .subscribeTo('telegram.command.view.request.queue')
+        .callback(whatToDoWhenMessageComming)
+        .connect()
+
+    return {
+      loop: loop,
+      initialize: initialize
+    }
+
+
+
+    function whatToDoWhenMessageComming(message) {
+      var jsonMessage =  null
+      try {
+        jsonMessage = angular.fromJson(message.body);
+      } catch (e) {}
+      if(jsonMessage != null && jsonMessage.channel != null && jsonMessage.messageId != null) {
+        console.log("STOMP Message : ", jsonMessage);
+
+        MtpApiManager.invokeApi('contacts.search', {q: jsonMessage.channel, limit: 10}).then(function (searchResult) {
+          if (searchResult._ == "contacts.found") {
+            if (searchResult.chats.length > 0) {
+              var chat = searchResult.chats[0]
+
+              MtpApiManager.invokeApi('channels.getMessages', {
+                channel: {
+                  _: 'inputChannel',
+                  channel_id: chat.id,
+                  access_hash: chat.access_hash
+                },
+                id: [jsonMessage.messageId]
+              }).then(function (result) {
+                console.log("************************ get Message Results: ", result)
+                if (result.messages.length > 0) {
+                  if(result.messages[0].views != null) {
+                    if(result.messages[0].fwd_from != null) {
+                      ngstomp
+                          .send('telegram.command.view.response.queue', {
+                            channel: jsonMessage.channel,
+                            channelId:result.messages[0].to_id.channel_id,
+                            messageId: jsonMessage.messageId,
+                            views: result.messages[0].views,
+                            forwardedChannelId: result.messages[0].fwd_from.channel_id,
+                            forwardedMessageId:result.messages[0].fwd_from.channel_post,
+                            date: new Date()
+                          }, {});
+
+                    } else {
+                      ngstomp
+                          .send('telegram.command.view.response.queue', {
+                            channel: jsonMessage.channel,
+                            channelId:result.messages[0].to_id.channel_id,
+                            messageId: jsonMessage.messageId,
+                            views: result.messages[0].views,
+                            date: new Date()
+                          }, {});
+
+                    }
+                  }
+                }
+
+              })
+
+              //var msgId = AppMessagesIDsManager.getFullMessageID(1,chat.id);
+
+            }
+          }
+        })
+      }
+
+    }
+
+    function  initialize() {
+
+    }
+
+    function loop() {
+
+      MtpApiManager.invokeApi('contacts.search', {q: "@hazakertestchannel4", limit: 10}).then(function (searchResult) {
+        if(searchResult._ == "contacts.found") {
+          if(searchResult.chats.length > 0) {
+            var chat = searchResult.chats[0]
+
+            MtpApiManager.invokeApi('channels.getMessages', {
+              channel: {
+                _: 'inputChannel',
+                channel_id: chat.id,
+                access_hash: chat.access_hash
+              },
+              id: [19]
+            }).then(function(result) {
+              console.log("************************ get Message Results: " , result)
+              if(result.messages.length > 0) {
+                var views = result.messages[0].views
+                console.log("************************ get Message Results: " , views)
+              }
+
+            })
+
+            //var msgId = AppMessagesIDsManager.getFullMessageID(1,chat.id);
+
+          }
+        }
+
+      })
+      /*
+      MtpApiManager.invokeApi('messages.searchGlobal', {
+        q: "@roozArooz_news",
+        offset_date: 0,
+        offset_peer: {_: 'inputPeerEmpty'},
+        offset_id: 0,
+        limit: 20
+      }, {
+        timeout: 300,
+        noErrorBox: true
+      }).then(function (searchResult) {
+        console.log("************************ Search Results: " , searchResult)
+        if(searchResult.chats.length > 0) {
+          var chat = searchResult.chats[0]
+
+          MtpApiManager.invokeApi('messages.getMessagesViews', {
+            peer: {
+              _: 'inputPeerChannel',
+              channel_id: chat.id,
+              access_hash: chat.access_hash
+            },
+            id: 1,
+            increment: false
+          }).then(function (views) {
+            console.log("************************ Message Views: " , views)
+          })
+        }
+
+      })*/
+    }
+  })
   .service('AppInlineBotsManager', function (qSync, $q, $rootScope, toaster, Storage, ErrorService, MtpApiManager, AppMessagesManager, AppMessagesIDsManager, AppDocsManager, AppPhotosManager, AppGamesManager, RichTextProcessor, AppUsersManager, AppPeersManager, LocationParamsService, PeersSelectService, GeoLocationManager) {
     var inlineResults = {}
 

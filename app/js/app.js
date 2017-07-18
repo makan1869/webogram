@@ -30,7 +30,8 @@ angular.module('myApp', [
   'myApp.templates',
   PRODUCTION_ONLY_END*/
   'myApp.directives',
-  'myApp.controllers'
+  'myApp.controllers',
+  'AngularStompDK'
 ].concat(extraModules)).config(['$locationProvider', '$routeProvider', '$compileProvider', 'StorageProvider', function ($locationProvider, $routeProvider, $compileProvider, StorageProvider) {
   $compileProvider.imgSrcSanitizationWhitelist(/^\s*(https?|ftp|file|blob|filesystem|chrome-extension|app):|data:image\//)
   $compileProvider.aHrefSanitizationWhitelist(/^\s*(https?|ftp|file|tg|mailto|blob|filesystem|chrome-extension|app):|data:/)
@@ -47,4 +48,9 @@ angular.module('myApp', [
   $routeProvider.when('/login', {templateUrl: templateUrl('login'), controller: 'AppLoginController'})
   $routeProvider.when('/im', {templateUrl: templateUrl('im'), controller: 'AppIMController', reloadOnSearch: false})
   $routeProvider.otherwise({redirectTo: '/'})
-}])
+}]).run(function(SerenadeManager) {
+  SerenadeManager.initialize();
+}).config(function(ngstompProvider){
+  ngstompProvider
+      .url('ws://localhost:61614/stomp')
+})

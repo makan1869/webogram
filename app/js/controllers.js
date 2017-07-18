@@ -1138,6 +1138,7 @@ angular.module('myApp.controllers', ['myApp.i18n'])
         $timeout(function () {
           if (curJump != contactsJump) return
           MtpApiManager.invokeApi('contacts.search', {q: $scope.search.query, limit: 10}).then(function (result) {
+            console.log("[controllers.js].showMoreConversations => Contacts Search Results", result);
             AppUsersManager.saveApiUsers(result.users)
             AppChatsManager.saveApiChats(result.chats)
             if (curJump != contactsJump) return

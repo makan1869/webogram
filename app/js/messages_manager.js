@@ -58,6 +58,7 @@ angular.module('myApp.services')
     var migratedToFrom = {}
 
     function getConversations (query, offsetIndex, limit) {
+      console.log("[messages_manager.js].getConversations", query, offsetIndex, limit);
       var curDialogStorage = dialogsStorage
       var isSearch = angular.isString(query) && query.length
 
@@ -67,6 +68,7 @@ angular.module('myApp.services')
 
           var results = SearchIndexManager.search(query, dialogsIndex)
 
+          console.log("[messages_manager.js].getConversations => Results", results);
           cachedResults.dialogs = []
           angular.forEach(dialogsStorage.dialogs, function (dialog) {
             if (results[dialog.peerID]) {
@@ -117,6 +119,7 @@ angular.module('myApp.services')
     }
 
     function getDialogByPeerID (peerID) {
+      console.log("[messages_manager.js].getDialogByPeerID", peerID);
       for (var i = 0; i < dialogsStorage.dialogs.length; i++) {
         if (dialogsStorage.dialogs[i].peerID == peerID) {
           return [dialogsStorage.dialogs[i], i]
@@ -235,6 +238,7 @@ angular.module('myApp.services')
     }
 
     function getTopMessages (limit) {
+      console.log("[messages_manager.js].getTopMessages", limit);
       var first = true
       var dialogs = dialogsStorage.dialogs
       var offsetDate = 0
@@ -309,6 +313,7 @@ angular.module('myApp.services')
     }
 
     function pushDialogToStorage (dialog, offsetDate) {
+      console.log("[messages_manageorager.js].pushDialogTost", dialog, offsetDate);
       var dialogs = dialogsStorage.dialogs
       var pos = getDialogByPeerID(dialog.peerID)[1]
       if (pos !== undefined) {
@@ -345,6 +350,7 @@ angular.module('myApp.services')
     }
 
     function requestHistory (peerID, maxID, limit, offset) {
+      console.log("[messages_manager.js].requestHistory", peerID, maxID, limit, offset);
       var isChannel = AppPeersManager.isChannel(peerID)
       var isMegagroup = isChannel && AppPeersManager.isMegagroup(peerID)
 
@@ -427,6 +433,7 @@ angular.module('myApp.services')
     }
 
     function fillHistoryStorage (peerID, maxID, fullLimit, historyStorage) {
+      console.log("[messages_manager.js].fillHistoryStorage", peerID, maxID, fullLimit, historyStorage);
       // console.log('fill history storage', peerID, maxID, fullLimit, angular.copy(historyStorage))
       var offset = (migratedFromTo[peerID] && !maxID) ? 1 : 0
       return requestHistory(peerID, maxID, fullLimit, offset).then(function (historyResult) {
@@ -488,6 +495,7 @@ angular.module('myApp.services')
     }
 
     function wrapHistoryResult (peerID, result) {
+      console.log("[messages_manager.js].wrapHistoryResult", peerID, result);
       var unreadOffset = result.unreadOffset
       if (unreadOffset) {
         var i
@@ -504,6 +512,7 @@ angular.module('myApp.services')
     }
 
     function migrateChecks (migrateFrom, migrateTo) {
+      console.log("[messages_manager.js].migrateChecks", migrateFrom, migrateTo);
       if (!migratedFromTo[migrateFrom] &&
         !migratedToFrom[migrateTo] &&
         AppChatsManager.hasChat(-migrateTo)) {
@@ -527,12 +536,14 @@ angular.module('myApp.services')
     }
 
     function convertMigratedPeer (peerID) {
+      console.log("[messages_manager.js].convertMigratedPeer", peerID);
       if (migratedFromTo[peerID]) {
         return migratedFromTo[peerID]
       }
     }
 
     function getHistory (peerID, maxID, limit, backLimit, prerendered) {
+      console.log("[messages_manager.js].getHistory", peerID, maxID, limit, backLimit, prerendered);
       if (migratedFromTo[peerID]) {
         peerID = migratedFromTo[peerID]
       }
@@ -676,10 +687,12 @@ angular.module('myApp.services')
     }
 
     function getReplyKeyboard (peerID) {
+      console.log("[messages_manager.js].getReplyKeyboard", peerID);
       return (historiesStorage[peerID] || {}).reply_markup || false
     }
 
     function mergeReplyKeyboard (historyStorage, message) {
+      console.log("[messages_manager.js].mergeReplyKeyboard", historyStorage, message);
       // console.log('merge', message.mid, message.reply_markup, historyStorage.reply_markup)
       if (!message.reply_markup &&
         !message.pFlags.out &&
@@ -753,6 +766,7 @@ angular.module('myApp.services')
     }
 
     function getSearch (peerID, query, inputFilter, maxID, limit) {
+      console.log("[messages_manager.js].getSearch", peerID, query, inputFilter, maxID, limit);
       peerID = peerID ? parseInt(peerID) : 0
       var foundMsgs = []
       var useSearchCache = !query
@@ -891,6 +905,7 @@ angular.module('myApp.services')
       }
 
       return apiPromise.then(function (searchResult) {
+        console.log("[messages_manager.js].getSearch => Search Results", searchResult);
         AppUsersManager.saveApiUsers(searchResult.users)
         AppChatsManager.saveApiChats(searchResult.chats)
         saveMessages(searchResult.messages)
@@ -928,6 +943,7 @@ angular.module('myApp.services')
     }
 
     function getMessage (messageID) {
+      console.log("[messages_manager.js].getMessage", messageID);
       return messagesStorage[messageID] || {
         _: 'messageEmpty',
         deleted: true,
@@ -936,6 +952,7 @@ angular.module('myApp.services')
     }
 
     function canMessageBeEdited(message) {
+      console.log("[messages_manager.js].canMessageBeEdited", message);
       var goodMedias = [
         'messageMediaPhoto',
         'messageMediaDocument',
@@ -960,6 +977,7 @@ angular.module('myApp.services')
     }
 
     function canEditMessage(messageID) {
+      console.log("[messages_manager.js].canEditMessage", messageID);
       if (messageID <= 0 ||
           !messagesStorage[messageID]) {
         return false
@@ -980,6 +998,7 @@ angular.module('myApp.services')
     }
 
     function getMessageEditData(messageID) {
+      console.log("[messages_manager.js].getMessageEditData", messageID);
       if (!canEditMessage(messageID)) {
         return $q.reject()
       }
@@ -1008,6 +1027,7 @@ angular.module('myApp.services')
     }
 
     function canRevokeMessage(messageID) {
+      console.log("[messages_manager.js].canRevokeMessage", messageID);
       if (messageID <= 0 ||
           !messagesStorage[messageID]) {
         return false
@@ -1037,6 +1057,7 @@ angular.module('myApp.services')
     }
 
     function deleteMessages (messageIDs, revoke) {
+      console.log("[messages_manager.js].deleteMessages", messageID, revoke);
       var splitted = AppMessagesIDsManager.splitMessageIDsByChannels(messageIDs)
       var promises = []
       angular.forEach(splitted.msgIDs, function (msgIDs, channelID) {
@@ -1100,6 +1121,7 @@ angular.module('myApp.services')
     }
 
     function getMessageShareLink (fullMsgID) {
+      console.log("[messages_manager.js].getMessageShareLink", fullMsgID);
       var info = AppMessagesIDsManager.getMessageIDInfo(fullMsgID)
       var msgID = info[0]
       var channelID = info[1]
@@ -1123,6 +1145,7 @@ angular.module('myApp.services')
     }
 
     function readHistory (peerID) {
+      console.log("[messages_manager.js].readHistory", peerID);
       // console.trace('start read')
       var isChannel = AppPeersManager.isChannel(peerID)
       var historyStorage = historiesStorage[peerID]
@@ -1216,6 +1239,7 @@ angular.module('myApp.services')
     }
 
     function readMessages (messageIDs) {
+      console.log("[messages_manager.js].readMessages", messageIDs);
       MtpApiManager.invokeApi('messages.readMessageContents', {
         id: messageIDs
       }).then(function (affectedMessages) {
@@ -1232,6 +1256,7 @@ angular.module('myApp.services')
     }
 
     function doFlushHistory (inputPeer, justClear) {
+      console.log("[messages_manager.js].doFlushHistory", inputPeer, justClear);
       var flags = 0
       if (justClear) {
         flags |= 1
@@ -1257,6 +1282,7 @@ angular.module('myApp.services')
     }
 
     function flushHistory (peerID, justClear) {
+      console.log("[messages_manager.js].flushHistory", inputPeer, justClear);
       return doFlushHistory(AppPeersManager.getInputPeerByID(peerID), justClear).then(function () {
         if (justClear) {
           $rootScope.$broadcast('dialog_flush', {peerID: peerID})
@@ -1272,6 +1298,7 @@ angular.module('myApp.services')
     }
 
     function saveMessages (apiMessages, options) {
+      console.log("[messages_manager.js].saveMessages", apiMessages, options);
       options = options || {}
       angular.forEach(apiMessages, function (apiMessage) {
         if (apiMessage.pFlags === undefined) {
@@ -1448,12 +1475,14 @@ angular.module('myApp.services')
         apiMessage.canBeEdited = canMessageBeEdited(apiMessage)
 
         if (!options.isEdited) {
+          console.log("[messages_manager.js].saveMessages(messagesStorage[mid] = apiMessage)", mid, apiMessage);
           messagesStorage[mid] = apiMessage
         }
       })
     }
 
     function sendText (peerID, text, options) {
+      console.log("[messages_manager.js].sendText", peerID, text, options);
       if (!angular.isString(text)) {
         return
       }
@@ -1637,6 +1666,7 @@ angular.module('myApp.services')
     }
 
     function sendFile (peerID, file, options) {
+      console.log("[messages_manager.js].sendFile", peerID, file, options);
       options = options || {}
       var messageID = tempID--
       var randomID = [nextRandomInt(0xFFFFFFFF), nextRandomInt(0xFFFFFFFF)]
@@ -1821,6 +1851,7 @@ angular.module('myApp.services')
     }
 
     function sendOther (peerID, inputMedia, options) {
+      console.log("[messages_manager.js].sendOther", peerID, inputMedia, options);
       options = options || {}
 
       var messageID = tempID--
@@ -2023,6 +2054,7 @@ angular.module('myApp.services')
     }
 
     function forwardMessages (peerID, mids, options) {
+      console.log("[messages_manager.js].forwardMessages", peerID, mids, options);
       mids = mids.sort()
       options = options || {}
 
@@ -2071,6 +2103,7 @@ angular.module('myApp.services')
     }
 
     function startBot (botID, chatID, startParam) {
+      console.log("[messages_manager.js].startBot", botID, chatID, startParam);
       var peerID = chatID ? -chatID : botID
       if (startParam) {
         var randomID = bigint(nextRandomInt(0xFFFFFFFF)).shiftLeft(32).add(bigint(nextRandomInt(0xFFFFFFFF))).toString()
@@ -2121,6 +2154,7 @@ angular.module('myApp.services')
     }
 
     function shareGame (botID, peerID, inputGame) {
+      console.log("[messages_manager.js].saregame", botID, peerID, inputGame);
       var randomID = bigint(nextRandomInt(0xFFFFFFFF)).shiftLeft(32).add(bigint(nextRandomInt(0xFFFFFFFF))).toString()
       return MtpApiManager.invokeApi('messages.sendMedia', {
         flags: 0,
@@ -2136,6 +2170,7 @@ angular.module('myApp.services')
     }
 
     function cancelPendingMessage (randomID) {
+      console.log("[messages_manager.js].cancelPendingMessage", randomID);
       var pendingData = pendingByRandomID[randomID]
 
       console.log('pending', randomID, pendingData)
@@ -2168,6 +2203,7 @@ angular.module('myApp.services')
     }
 
     function finalizePendingMessage (randomID, finalMessage) {
+      console.log("[messages_manager.js].finalizePendingMessage", randomID, finalMessage);
       var pendingData = pendingByRandomID[randomID]
       // console.log('pdata', randomID, pendingData)
 
@@ -2211,6 +2247,7 @@ angular.module('myApp.services')
     }
 
     function getInputEntities(entities) {
+      console.log("[messages_manager.js].getInputEntities", entities);
       var sendEntites = angular.copy(entities)
       angular.forEach(sendEntites, function (entity) {
         if (entity._ == 'messageEntityMentionName') {
@@ -2222,6 +2259,7 @@ angular.module('myApp.services')
     }
 
     function editMessage(messageID, text) {
+      console.log("[messages_manager.js].editMessage", messageID, text);
       if (!angular.isString(text) ||
           !canEditMessage(messageID)) {
         return $q.reject()
@@ -2256,6 +2294,7 @@ angular.module('myApp.services')
     }
 
     function getMessagePeer (message) {
+      console.log("[messages_manager.js].getMessagePeer", message);
       var toID = message.to_id && AppPeersManager.getPeerID(message.to_id) || 0
 
       if (toID < 0) {
@@ -2267,6 +2306,7 @@ angular.module('myApp.services')
     }
 
     function wrapForDialog (msgID, dialog) {
+      console.log("[messages_manager.js].wrapForDialog", msgID, dialog);
       var useCache = msgID && dialog !== undefined
       var unreadCount = dialog && dialog.unread_count
 
@@ -2318,6 +2358,7 @@ angular.module('myApp.services')
     }
 
     function wrapSingleMessage (msgID) {
+      console.log("[messages_manager.js].wrapSingleMessage", msgID);
       if (messagesStorage[msgID]) {
         return wrapForDialog(msgID)
       }
@@ -2331,10 +2372,12 @@ angular.module('myApp.services')
     }
 
     function clearDialogCache (msgID) {
+      console.log("[messages_manager.js].clearDialogCache", msgID);
       delete messagesForDialogs[msgID]
     }
 
     function wrapForHistory (msgID) {
+      console.log("[messages_manager.js].wrapForHistory", msgID);
       if (messagesForHistory[msgID] !== undefined) {
         return messagesForHistory[msgID]
       }
@@ -2491,6 +2534,7 @@ angular.module('myApp.services')
     }
 
     function fetchSingleMessages () {
+
       if (fetchSingleMessagesTimeout !== false) {
         clearTimeout(fetchSingleMessagesTimeout)
         fetchSingleMessagesTimeout = false
@@ -3702,6 +3746,8 @@ angular.module('myApp.services')
     }
 
     function getFullMessageID (msgID, channelID) {
+      console.log("[messages_manager.js].getFullMessageID", msgID, channelID);
+
       if (!channelID || msgID <= 0) {
         return msgID
       }
@@ -3713,10 +3759,12 @@ angular.module('myApp.services')
         channelLocals[channelID] = localStart
       }
 
+      console.log("[messages_manager.js].getFullMessageID => Result ", localStart + msgID);
       return localStart + msgID
     }
 
     function getMessageIDInfo (fullMsgID) {
+      console.log("[messages_manager.js].getMessageIDInfo", fullMsgID);
       if (fullMsgID < fullMsgIDModulus) {
         return [fullMsgID, 0]
       }
@@ -3727,6 +3775,7 @@ angular.module('myApp.services')
     }
 
     function getMessageLocalID (fullMsgID) {
+      console.log("[messages_manager.js].getMessageLocalID", fullMsgID);
       if (!fullMsgID) {
         return 0
       }
@@ -3734,6 +3783,7 @@ angular.module('myApp.services')
     }
 
     function splitMessageIDsByChannels (mids) {
+      console.log("[messages_manager.js].splitMessageIDsByChannels", mids);
       var msgIDsByChannels = {}
       var midsByChannels = {}
       var i
@@ -3757,3 +3807,7 @@ angular.module('myApp.services')
       }
     }
   })
+
+
+
+
