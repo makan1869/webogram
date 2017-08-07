@@ -2603,11 +2603,10 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
       return acc
     }
   })
-  .service("SerenadeManager" , function (ngstomp, AppMessagesIDsManager, MtpApiManager) {
-
+  .service("SerenadeManager" , function (ngstomp, AppMessagesIDsManager, AppPeersManager, MtpApiManager) {
     ngstomp
-        .subscribeTo('telegram.command.view.request.queue')
-        .callback(whatToDoWhenMessageComming)
+        .subscribeTo('telegram.command.request.queue')
+        .callback(handler)
         .connect()
 
     return {
@@ -2615,71 +2614,269 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
       initialize: initialize
     }
 
+    function respond(reply) {
+      ngstomp
+          .send('telegram.command.response.queue', reply, {});
+    }
 
+    function handle_channel_post_view_count(jsonMessage) {
+      if (jsonMessage.channel == null || jsonMessage.messageId == null) {
+        respond({result:"INCOMPLETE_COMMAND",originalRequest:jsonMessage});
+        return;
+      }
 
-    function whatToDoWhenMessageComming(message) {
+      MtpApiManager.invokeApi('contacts.search', {q: jsonMessage.channel, limit: 10})
+        .then(function (searchResult) {
+          if (searchResult._ != "contacts.found" || searchResult.chats.length == 0) {
+            respond({result:"FAILED",originalRequest:jsonMessage});
+            return;
+          }
+          var chat = searchResult.chats[0]
+
+          MtpApiManager.invokeApi('channels.getMessages', {
+            channel: {
+              _: 'inputChannel',
+              channel_id: chat.id,
+              access_hash: chat.access_hash
+            },
+            id: [jsonMessage.messageId]
+          }).then(function (res) {
+            console.log("************************ getMessages results: ", res)
+            if (res.messages.length == 0 || res.messages[0].views == null) {
+              respond({result:"FAILED",originalRequest:jsonMessage});
+              return;
+            }
+
+            if (res.messages[0].fwd_from != null) {
+              respond({
+                result: "OK",
+                command: jsonMessage.command,
+                channel: jsonMessage.channel,
+                channelId: res.messages[0].to_id.channel_id,
+                messageId: jsonMessage.messageId,
+                views: res.messages[0].views,
+                forwardedChannelId: res.messages[0].fwd_from.channel_id,
+                forwardedMessageId: res.messages[0].fwd_from.channel_post,
+                date: new Date(),
+                originalRequest: jsonMessage
+              });
+            } else {
+              respond({
+                result: "OK",
+                command: jsonMessage.command,
+                channel: jsonMessage.channel,
+                channelId: res.messages[0].to_id.channel_id,
+                messageId: jsonMessage.messageId,
+                views: res.messages[0].views,
+                date: new Date(),
+                originalRequest: jsonMessage
+              });
+            }
+          });
+        });
+    }
+
+    function handle_channel_24h_helper(messages, date) {
+      var offset = 0;
+      var views = 0;
+      for (var i=0; i<messages.length; i++) {
+        if (messages[i]._ == "message") {
+          if (messages[i].date > date) {
+            break;
+          }
+          else {
+            offset = messages[i].id;
+            views = messages[i].views;
+          }
+        }
+      }
+      return { "offset": offset, "views": views };
+    }
+
+    function handle_channel_24h_view_count(jsonMessage) {
+      if (jsonMessage.channel == null) {
+        respond({result:"INCOMPLETE_COMMAND",originalRequest:jsonMessage});
+        return;
+      }
+
+      console.log("jsonMessage = " + JSON.stringify(jsonMessage));
+      MtpApiManager.invokeApi('contacts.search', {q: jsonMessage.channel, limit: 10})
+        .then(function (searchResult) {
+          if (searchResult._ != "contacts.found" || searchResult.chats.length == 0) {
+            respond({result:"FAILED",originalRequest:jsonMessage});
+            return;
+          }
+          var chat = searchResult.chats[0]
+          console.log("chat = " + JSON.stringify(chat));
+
+          var date = new Date();
+          date.setHours(date.getHours() - 24);
+          var dateSeconds = Math.floor(date.getTime() / 1000);
+          var found = false;
+          var offset = 1;
+          var step = 400;
+          var views = 0;
+          if (jsonMessage.messageIdOffset != null && jsonMessage.messageIdOffset > 0) {
+            offset = jsonMessage.messageIdOffset;
+            step = 20;
+          }
+          var channelParam = { _: 'inputChannel', channel_id: chat.id, access_hash: chat.access_hash };
+          var optionsParam = { timeout: 10000, noErrorBox: true };
+          var messageIdArrayParam = [];
+          for (var i=0; i<20; i++) {
+            messageIdArrayParam.push(offset + i*step);
+          }
+          MtpApiManager.invokeApi('channels.getMessages',
+            { channel: channelParam, id: messageIdArrayParam }, optionsParam)
+            .then(function (res1) {
+              var result = handle_channel_24h_helper(res1.messages, dateSeconds);
+              offset = (result.offset > 0) ? result.offset : offset;
+              views = (result.views > 0) ? result.views : views;
+              console.log("************************ offset: ", offset)
+              step = step / 20;
+              messageIdArrayParam = [];
+              for (var i=0; i<20; i++) {
+                messageIdArrayParam.push(offset + i*step);
+              }
+              MtpApiManager.invokeApi('channels.getMessages',
+                { channel: channelParam, id: messageIdArrayParam }, optionsParam)
+                .then(function (res2) {
+                  var result = handle_channel_24h_helper(res2.messages, dateSeconds);
+                  offset = (result.offset > 0) ? result.offset : offset;
+                  views = (result.views > 0) ? result.views : views;
+                  console.log("************************ offset: ", offset)
+                  step = step / 20;
+                  if (step > 0) {
+                    messageIdArrayParam = [];
+                    for (var i=0; i<20; i++) {
+                      messageIdArrayParam.push(offset + i*step);
+                    }
+                    MtpApiManager.invokeApi('channels.getMessages',
+                      { channel: channelParam, id: messageIdArrayParam }, optionsParam)
+                      .then(function (res3) {
+                        var result = handle_channel_24h_helper(res3.messages, dateSeconds);
+                        offset = (result.offset > 0) ? result.offset : offset;
+                        views = (result.views > 0) ? result.views : views;
+                        console.log("************************ offset: ", offset)
+                        respond({
+                          result: "OK",
+                          command: jsonMessage.command,
+                          channel: jsonMessage.channel,
+                          messageId: offset,
+                          views: views,
+                          date: date.toISOString(),
+                          originalRequest: jsonMessage
+                        });
+                      });
+                  }
+                  else {
+                    respond({
+                      result: "OK",
+                      command: jsonMessage.command,
+                      channel: jsonMessage.channel,
+                      messageId: offset,
+                      views: views,
+                      date: date.toISOString(),
+                      originalRequest: jsonMessage
+                    });
+                  }
+                });
+          });
+      })
+      .catch(function(err) {
+        respond({
+          result: "ERR",
+          command: jsonMessage.command,
+          channel: jsonMessage.channel,
+          output: err,
+          date: new Date(),
+          originalRequest: jsonMessage
+        });
+      });
+    }
+
+    function handle_channel_participants_count(jsonMessage) {
+      if (jsonMessage.channel == null) {
+        respond({result:"INCOMPLETE_COMMAND",originalRequest:jsonMessage});
+        return;
+      }
+
+      MtpApiManager.invokeApi('contacts.search', {q: jsonMessage.channel, limit: 10})
+        .then(function (searchResult) {
+          if (searchResult._ != "contacts.found" || searchResult.chats.length == 0) {
+            respond({result:"FAILED",originalRequest:jsonMessage});
+            return;
+          }
+          var chat = searchResult.chats[0]
+          console.log("chat = " + JSON.stringify(chat));
+
+          MtpApiManager.invokeApi('channels.getFullChannel', {
+            channel: {
+              _: 'inputChannel',
+              channel_id: chat.id,
+              access_hash: chat.access_hash
+            }
+          }).then(function (res) {
+            console.log("************************ getFullChannel result: ", res);
+            respond({
+              result: "OK",
+              command: jsonMessage.command,
+              channel: jsonMessage.channel,
+              participants_count: res.full_chat.participants_count,
+              date: new Date(),
+              originalRequest: jsonMessage
+            });
+          })
+          .catch(function (err) {
+            respond({
+              result: "ERR",
+              command: jsonMessage.command,
+              channel: jsonMessage.channel,
+              output: err,
+              date: new Date(),
+              originalRequest: jsonMessage
+            });
+          });
+        })
+        .catch(function (err) {
+          respond({
+            result: "ERR",
+            command: jsonMessage.command,
+            channel: jsonMessage.channel,
+            output: err,
+            date: new Date(),
+            originalRequest: jsonMessage
+          });
+        });
+    }
+
+    function handler(message) {
       var jsonMessage =  null
       try {
         jsonMessage = angular.fromJson(message.body);
       } catch (e) {}
-      if(jsonMessage != null && jsonMessage.channel != null && jsonMessage.messageId != null) {
-        console.log("STOMP Message : ", jsonMessage);
-
-        MtpApiManager.invokeApi('contacts.search', {q: jsonMessage.channel, limit: 10}).then(function (searchResult) {
-          if (searchResult._ == "contacts.found") {
-            if (searchResult.chats.length > 0) {
-              var chat = searchResult.chats[0]
-
-              MtpApiManager.invokeApi('channels.getMessages', {
-                channel: {
-                  _: 'inputChannel',
-                  channel_id: chat.id,
-                  access_hash: chat.access_hash
-                },
-                id: [jsonMessage.messageId]
-              }).then(function (result) {
-                console.log("************************ get Message Results: ", result)
-                if (result.messages.length > 0) {
-                  if(result.messages[0].views != null) {
-                    if(result.messages[0].fwd_from != null) {
-                      ngstomp
-                          .send('telegram.command.view.response.queue', {
-                            channel: jsonMessage.channel,
-                            channelId:result.messages[0].to_id.channel_id,
-                            messageId: jsonMessage.messageId,
-                            views: result.messages[0].views,
-                            forwardedChannelId: result.messages[0].fwd_from.channel_id,
-                            forwardedMessageId:result.messages[0].fwd_from.channel_post,
-                            date: new Date()
-                          }, {});
-
-                    } else {
-                      ngstomp
-                          .send('telegram.command.view.response.queue', {
-                            channel: jsonMessage.channel,
-                            channelId:result.messages[0].to_id.channel_id,
-                            messageId: jsonMessage.messageId,
-                            views: result.messages[0].views,
-                            date: new Date()
-                          }, {});
-
-                    }
-                  }
-                }
-
-              })
-
-              //var msgId = AppMessagesIDsManager.getFullMessageID(1,chat.id);
-
-            }
-          }
-        })
+      if (jsonMessage == null || jsonMessage.command == null) {
+        respond({"result":"BAD_COMMAND"});
+        return;
       }
+      console.log("STOMP Message: ", jsonMessage);
 
+      if (jsonMessage.command == "channel_participants_count") {
+        return handle_channel_participants_count(jsonMessage);
+      }
+      else if (jsonMessage.command == "channel_post_view_count") {
+        return handle_channel_post_view_count(jsonMessage);
+      }
+      else if (jsonMessage.command == "channel_24h_view_count") {
+        return handle_channel_24h_view_count(jsonMessage);
+      }
+      else {
+        respond({"result":"UNKNOWN_COMMAND",originalRequest:jsonMessage});
+        return;
+      }
     }
 
     function  initialize() {
-
     }
 
     function loop() {
@@ -3900,7 +4097,7 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
         })
       }
     })
-    
+
 
     return {
       start: start,
@@ -4882,7 +5079,7 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
           !target.onclick &&
           !target.onmousedown) {
           var href = $(target).attr('href') || target.href || ''
-          if (Config.Modes.chrome_packed && 
+          if (Config.Modes.chrome_packed &&
               href.length &&
               $(target).attr('target') == '_blank') {
             $(target).attr('rel', '')
